@@ -2,11 +2,14 @@
 import logging
 import socket
 from collections import defaultdict, deque
+from threading import Thread
 from typing import Callable, DefaultDict, Deque
 
-from . import protocol
+from . import helper, protocol
 
 logger = logging.getLogger(__name__)
+
+SOCKET_BUFSIZE = 1024
 
 
 class ZhongHongGateway:
@@ -15,15 +18,23 @@ class ZhongHongGateway:
         self.ip_addr = ip_addr
         self.port = port
         self.sock = self.__get_socket()
-        self.callbacks = defaultdict(
-            deque)  # type: DefaultDict[protocol.Header, deque]
         self.ac_callbacks = defaultdict(
             deque)  # type DefaultDict[protocol.AcAddr, Deque[Callable]]
+
+        self._listening = False
+        self._threads = []
 
     def __get_socket(self) -> socket.socket:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.connect((self.ip_addr, self.port))
         return s
+
+    def _reopen_socket(self):
+        if self.sock:
+            self.sock.close()
+            self.sock = None
+        self.sock = self.__get_socket()
+        return self.sock
 
     def add_status_callback(self, ac_addr: protocol.AcAddr,
                             func: Callable) -> None:
@@ -37,48 +48,16 @@ class ZhongHongGateway:
         message.add(ac_addr)
         return self.send(message)
 
-    def send(self, ac_data: protocol.AcData) -> bool:
-        resp = self._send(ac_data)
-        logger.debug("send << %s", resp)
-        return self.push_data(resp)
-
-    def _send(self, ac_data: protocol.AcData) -> protocol.AcData:
+    def send(self, ac_data: protocol.AcData) -> None:
         try:
             self.sock.settimeout(10.0)
             logger.debug("send >> %s", ac_data.encode())
             self.sock.send(ac_data.encode())
-            data = self.sock.recv(1024)
 
         except socket.timeout:
             logger.error("Connot connect to gateway %s:%s", self.ip_addr,
                          self.port)
             return None
-
-        if data is None:
-            logger.error("No response from gateway")
-        try:
-            resp = protocol.parse_data(data)
-            logger.debug("send << %s", str(resp))
-        except protocol.ChecksumError:
-            logger.error("checksum error")
-            return None
-
-        if resp.header != ac_data.header:
-            logger.error("No matching response. Expect %s, but got %s",
-                         ac_data.header, resp.header)
-            return None
-        return resp
-
-    def push_data(self, data: protocol.AcData) -> bool:
-        if not self._validate_data(data):
-            return False
-
-        for _data in data.payload:
-            if isinstance(_data, protocol.AcStatus):
-                for func in self.ac_callbacks[_data.ac_addr]:
-                    func(_data)
-
-        return True
 
     def _validate_data(self, data):
         if data is None:
@@ -86,3 +65,39 @@ class ZhongHongGateway:
             return False
 
         return True
+
+    def _listen_to_msg(self):
+        while self._listening:
+            try:
+                data = self.sock.recv(SOCKET_BUFSIZE)
+            except ConnectionResetError:
+                self._reopen_socket()
+
+            if not data:
+                continue
+
+            for ac_data in helper.get_ac_data(data):
+                logger.debug("get ac_data << %s", ac_data)
+
+                for payload in ac_data:
+                    if isinstance(payload, protocol.AcStatus):
+                        for func in self.ac_callbacks[payload.ac_addr]:
+                            func(payload)
+
+    def listen(self):
+        """Start listening."""
+        self._listening = True
+        thread = Thread(target=self._listen_to_msg, args=())
+        self._threads.append(thread)
+        thread.daemon = True
+        thread.start()
+
+    def stop_listen(self):
+        self._listening = False
+        if self.sock:
+            logger.info('Closing socket.')
+            self.sock.close()
+            self.sock = None
+
+        for thread in self._threads:
+            thread.join()

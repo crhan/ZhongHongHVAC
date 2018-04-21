@@ -3,7 +3,7 @@ import enum
 import logging
 import struct
 from functools import reduce
-from typing import List
+from typing import List, Iterator
 
 import attr
 
@@ -194,7 +194,7 @@ class AcStatus(ZhongHongDataStruct):
 
 
 @attr.s(slots=True)
-class AcData(object):
+class AcData(collections.Iterable):
     header = attr.ib(init=False)  # type: Header
     payload = attr.ib(
         attr.Factory(collections.deque),
@@ -206,6 +206,9 @@ class AcData(object):
 
     def __str__(self):
         return '\n'.join([str(self.header)] + [str(x) for x in self.payload])
+
+    def __iter__(self) -> Iterator[ZhongHongDataStruct]:
+        yield from iter(self.payload)
 
     @property
     def length(self):

@@ -1,6 +1,7 @@
 import copy
 import logging
 import struct
+import socket
 
 from .protocol import (AcData, AcStatus, ChecksumError, CtlStatus, FuncCode,
                        Header)
@@ -89,6 +90,6 @@ def parse_data(data_frame):
     return ac_data
 
 
-def get_ac_data(data):
+def get_ac_data(data: bytes) -> AcData:
     for data_frame in get_data_frame(data):
         yield parse_data(data_frame)

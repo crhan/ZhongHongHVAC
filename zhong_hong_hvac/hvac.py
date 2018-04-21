@@ -17,16 +17,18 @@ class HVAC:
 
         self.switch_status = None
         self.target_temperature = None
-        self.mode = None
-        self.fan_speed = None
-        self.room_temperature = None
+        self.current_operation = None
+        self.current_fan_mode = None
+        self.current_temperature = None
         self.error_code = None
 
     def _status_update(self, ac_status: protocol.AcStatus) -> bool:
         assert self.ac_addr == ac_status.ac_addr
-        for _attr in ("switch_status", "target_temperature", "mode",
-                      "fan_speed", "room_temperature", "error_code"):
+        for _attr in ("switch_status", "target_temperature", "current_operation",
+                      "current_fan_mode", "current_temperature", "error_code"):
             setattr(self, _attr, getattr(ac_status, _attr))
+
+        logger.info("[callback]hvac %s status updated: %s", self.ac_addr, self.status())
 
     def send(self, ac_data: protocol.AcData) -> None:
         self.gw.send(ac_data)
@@ -36,21 +38,39 @@ class HVAC:
         message.header = protocol.Header(
             self.gw_addr, protocol.FuncCode.STATUS, protocol.CtlStatus.ONE, 1)
         message.add(self.ac_addr)
-        if not self.gw.query_status(self.ac_addr):
-            logger.error("update hvac status fail: %s", self.ac_addr)
-            return False
+        self.gw.query_status(self.ac_addr)
         return True
 
     def status(self):
         return json.dumps({
             "switch_status": self.switch_status.name,
             "target_temperature": self.target_temperature,
-            "mode": self.mode.name,
-            "fan_speed": self.fan_speed.name,
-            "room_temperature": self.room_temperature,
+            "current_operation": self.current_operation.name,
+            "current_fan_mode": self.current_fan_mode.name,
+            "current_temperature": self.current_temperature,
             "error_code": self.error_code
         })
 
     @property
+    def operation_list(self):
+        return [x.name for x in list(protocol.StatusOperation)]
+
+    @property
+    def fan_list(self):
+        return [x.name for x in list(protocol.StatusFanMode)]
+
+    @property
     def gw_addr(self):
         return self.gw.gw_addr
+
+    @property
+    def is_on(self):
+        return self.switch_status == protocol.StatusSwitch.ON
+
+    @property
+    def min_temp(self):
+        return 16
+
+    @property
+    def max_temp(self):
+        return 30

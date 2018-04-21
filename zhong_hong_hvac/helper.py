@@ -4,7 +4,7 @@ import struct
 import socket
 
 from .protocol import (AcData, AcStatus, ChecksumError, CtlStatus, FuncCode,
-                       Header)
+                       Header, AcOnline)
 
 logger = logging.getLogger(__name__)
 
@@ -43,8 +43,8 @@ def get_data_frame(data):
             header = Header.get_header_from_frame(data)
             header.check()
 
-        except ValueError as e:
-            logger.error("header code unknown: %s", data[:4], exc_info=e)
+        except ValueError:
+            logger.debug("header code unknown: %s", data[:4])
             data = data[1:]
             continue
 
@@ -71,17 +71,20 @@ def parse_data(data_frame):
     logger.debug(str(header))
 
     if header.func_code == FuncCode.STATUS:
-        if header.ctl_code == CtlStatus.ONE:
-            ac_status = AcStatus(*struct.unpack('B' * 10, data_frame[4:14]))
-            logger.debug(ac_status.export())
-            logger.debug(str(ac_status))
-            ac_data.add(ac_status)
-        elif header.ctl_code == CtlStatus.ALL:
+        if header.ctl_code in (CtlStatus.ONE, CtlStatus.MULTI, CtlStatus.ALL):
             for idx in range(header.ac_num):
                 start = 4 + idx * 10
                 end = 4 + (idx + 1) * 10
-                ac_data.add(
-                    AcStatus(*struct.unpack('B' * 10, data_frame[start:end])))
+                ac_status = AcStatus(
+                    *struct.unpack('B' * 10, data_frame[start:end]))
+                ac_data.add(ac_status)
+        elif header.ctl_code == CtlStatus.ONLINE:
+            for idx in range(header.ac_num):
+                start = 4 + idx * 3
+                end = 4 + (idx + 1) * 3
+                ac_address = AcOnline(
+                    *struct.unpack('BBB', data_frame[start:end]))
+                ac_data.add(ac_address)
         else:
             raise TypeError("not support type: %s" % header)
     else:

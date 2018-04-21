@@ -10,6 +10,10 @@ import attr
 logger = logging.getLogger(__name__)
 
 
+def bytes_debug_str(data: bytes):
+    return '[%s]' % ' '.join([hex(x) for x in bytearray(data)])
+
+
 class ChecksumError(Exception):
     pass
 
@@ -17,15 +21,15 @@ class ChecksumError(Exception):
 class FuncCode(enum.Enum):
     STATUS = 0x50
     CTL_POWER = 0x31
-    CTL_TEMP = 0x32
-    CTL_MODE = 0x33
-    CTL_FAN_SPEED = 0x34
+    CTL_TEMPERATURE = 0x32
+    CTL_OPERATION = 0x33
+    CTL_FAN_MODE = 0x34
 
 
 class CtlStatus(enum.Enum):
     ONE = 0x01
     MULTI = 0x0f
-    ONLINE = 0x0f
+    ONLINE = 0x02
     ALL = 0xff
 
 
@@ -38,14 +42,14 @@ class StatusSwitch(enum.Enum):
         return cls(value % 2)
 
 
-class StatusMode(enum.Enum):
+class StatusOperation(enum.Enum):
     COLD = 0x01
     DEHUMIDIFY = 0x02
     BLAST = 0x04
     HEAT = 0x08
 
 
-class StatusFanSpeed(enum.Enum):
+class StatusFanMode(enum.Enum):
     HIGH = 0x01
     MID = 0x02
     LOW = 0x04
@@ -59,17 +63,17 @@ AC_ADDR_LEN = 2
 @attr.s
 class ZhongHongDataStruct:
     @staticmethod
-    def _to_int(element):
+    def _to_value(element):
         if isinstance(element, enum.Enum):
             return int(element.value)
         return int(element)
 
     def export(self):
-        return list(map(self._to_int, attr.astuple(self)))
+        return list(map(self._to_value, attr.astuple(self)))
 
     @staticmethod
     def _sum(init, element):
-        return init + ZhongHongDataStruct._to_int(element)
+        return init + ZhongHongDataStruct._to_value(element)
 
     @property
     def checksum(self):
@@ -83,9 +87,9 @@ class ZhongHongDataStruct:
 @attr.s(slots=True, hash=True)
 class Header(ZhongHongDataStruct):
     gw_addr = attr.ib()
-    _func_code = attr.ib()
-    _ctl_code = attr.ib()
-    ac_num = attr.ib()
+    _func_code = attr.ib(converter=ZhongHongDataStruct._to_value)
+    _ctl_code = attr.ib(converter=ZhongHongDataStruct._to_value)
+    ac_num = attr.ib(cmp=False)
 
     @property
     def is_valid(self):
@@ -116,10 +120,10 @@ class Header(ZhongHongDataStruct):
             return CtlStatus(self._ctl_code)
         elif self.func_code == FuncCode.CTL_POWER:
             return StatusSwitch(self._ctl_code)
-        elif self.func_code == FuncCode.CTL_TEMP:
+        elif self.func_code == FuncCode.CTL_TEMPERATURE:
             return self._ctl_code
-        elif self.func_code == FuncCode.CTL_FAN_SPEED:
-            return StatusFanSpeed(self._ctl_code)
+        elif self.func_code == FuncCode.CTL_FAN_MODE:
+            return StatusFanMode(self._ctl_code)
         return None
 
     def __str__(self):
@@ -144,12 +148,12 @@ class Header(ZhongHongDataStruct):
             if self.ctl_code in (CtlStatus.ONE, CtlStatus.MULTI,
                                  CtlStatus.ALL):
                 payload_length = STATUS_PAYLOAD_LEN * self.ac_num
-            elif self.ctl_code in (CtlStatus.ONLINE):
+            elif self.ctl_code == CtlStatus.ONLINE:
                 payload_length = STATUS_ONLINE_PAYLOAD_LEN * self.ac_num
             else:
                 raise Exception("unknown ctrl code: %s", self.header.export())
-        elif self.func_code in (FuncCode.CTL_POWER, FuncCode.CTL_TEMP,
-                                FuncCode.CTL_MODE, FuncCode.CTL_FAN_SPEED):
+        elif self.func_code in (FuncCode.CTL_POWER, FuncCode.CTL_TEMPERATURE,
+                                FuncCode.CTL_OPERATION, FuncCode.CTL_FAN_MODE):
             payload_length = AcAddr * self.ac_num
         else:
             raise Exception("unknown func code: %s", self.header.export())
@@ -169,6 +173,19 @@ class AcAddr(ZhongHongDataStruct):
     def __str__(self):
         return "AC %s-%s" % (self.addr_out, self.addr_in)
 
+@attr.s(slots=True, hash=True)
+class AcOnline(ZhongHongDataStruct):
+    addr_out = attr.ib()
+    addr_in = attr.ib()
+    online_status = attr.ib(cmp=False)
+
+    @property
+    def ac_addr(self):
+        return AcAddr(self.addr_out, self.addr_in)
+
+    def __str__(self):
+        return "%s online_status: %s" % (self.ac_addr, self.online_status)
+
 
 @attr.s(slots=True)
 class AcStatus(ZhongHongDataStruct):
@@ -176,9 +193,9 @@ class AcStatus(ZhongHongDataStruct):
     addr_in = attr.ib()
     switch_status = attr.ib(converter=StatusSwitch.new_status_switch)
     target_temperature = attr.ib()
-    mode = attr.ib(converter=StatusMode)
-    fan_speed = attr.ib(converter=StatusFanSpeed)
-    room_temperature = attr.ib()
+    current_operation = attr.ib(converter=StatusOperation)
+    current_fan_mode = attr.ib(converter=StatusFanMode)
+    current_temperature = attr.ib()
     error_code = attr.ib()
     padding1 = attr.ib()
     padding2 = attr.ib()
@@ -188,9 +205,9 @@ class AcStatus(ZhongHongDataStruct):
         return AcAddr(self.addr_out, self.addr_in)
 
     def __str__(self):
-        return "AC %s-%s power %s, mode %s, speed %s, target_temp %s, room_temp %s" % (
-            self.addr_out, self.addr_in, self.switch_status, self.mode,
-            self.fan_speed, self.target_temperature, self.room_temperature)
+        return "AC %s-%s power %s, current_operation %s, speed %s, target_temp %s, room_temp %s" % (
+            self.addr_out, self.addr_in, self.switch_status, self.current_operation,
+            self.current_fan_mode, self.target_temperature, self.current_temperature)
 
 
 @attr.s(slots=True)
@@ -223,8 +240,8 @@ class AcData(collections.Iterable):
                 payload_length = STATUS_ONLINE_PAYLOAD_LEN * self.ac_num
             else:
                 raise Exception("unknown ctrl code: %s", self.header.export())
-        elif self.func_code in (FuncCode.CTL_POWER, FuncCode.CTL_TEMP,
-                                FuncCode.CTL_MODE, FuncCode.CTL_FAN_SPEED):
+        elif self.func_code in (FuncCode.CTL_POWER, FuncCode.CTL_TEMPERATURE,
+                                FuncCode.CTL_OPERATION, FuncCode.CTL_FAN_MODE):
             payload_length = AcAddr * self.ac_num
         else:
             raise Exception("unknown func code: %s", self.header.export())
@@ -261,3 +278,6 @@ class AcData(collections.Iterable):
         return b''.join([self.header.encode()] +
                         [x.encode()
                          for x in self.payload] + [self.bin_checksum])
+
+    def hex(self):
+        return bytes_debug_str(self.encode())

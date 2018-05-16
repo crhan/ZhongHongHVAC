@@ -154,7 +154,7 @@ class Header(ZhongHongDataStruct):
                 raise Exception("unknown ctrl code: %s", self.header.export())
         elif self.func_code in (FuncCode.CTL_POWER, FuncCode.CTL_TEMPERATURE,
                                 FuncCode.CTL_OPERATION, FuncCode.CTL_FAN_MODE):
-            payload_length = AcAddr * self.ac_num
+            payload_length = AC_ADDR_LEN * self.ac_num
         else:
             raise Exception("unknown func code: %s", self.header.export())
 

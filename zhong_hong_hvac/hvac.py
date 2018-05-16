@@ -1,6 +1,8 @@
 import json
 import logging
 import socket
+from typing import Callable, List
+import enum
 
 from . import hub, protocol
 
@@ -8,12 +10,13 @@ logger = logging.getLogger(__name__)
 
 
 class HVAC:
-    def __init__(self, gw: hub.ZhongHongGateway, out_addr: int, in_addr: int):
+    def __init__(self, gw: hub.ZhongHongGateway, addr_out: int, addr_in: int):
         self.gw = gw
-        self.out_addr = out_addr
-        self.in_addr = in_addr
-        self.ac_addr = protocol.AcAddr(self.out_addr, self.in_addr)
+        self.addr_out = addr_out
+        self.addr_in = addr_in
+        self.ac_addr = protocol.AcAddr(self.addr_out, self.addr_in)
         self.gw.add_status_callback(self.ac_addr, self._status_update)
+        self.status_callback = []  # type: List[Callable]
 
         self.switch_status = None
         self.target_temperature = None
@@ -24,11 +27,25 @@ class HVAC:
 
     def _status_update(self, ac_status: protocol.AcStatus) -> bool:
         assert self.ac_addr == ac_status.ac_addr
-        for _attr in ("switch_status", "target_temperature", "current_operation",
-                      "current_fan_mode", "current_temperature", "error_code"):
-            setattr(self, _attr, getattr(ac_status, _attr))
+        for _attr in ("switch_status", "target_temperature",
+                      "current_operation", "current_fan_mode",
+                      "current_temperature", "error_code"):
+            value = getattr(ac_status, _attr)
+            if isinstance(value, enum.Enum):
+                value = value.name
+            setattr(self, _attr, value)
 
-        logger.info("[callback]hvac %s status updated: %s", self.ac_addr, self.status())
+        logger.info("[callback]hvac %s status updated: %s", self.ac_addr,
+                    self.status())
+        for func in self.status_callback:
+            if callable(func):
+                func(self)
+
+    def register_update_callback(self, _callable: Callable) -> bool:
+        if callable(_callable):
+            self.status_callback.append(_callable)
+            return True
+        return False
 
     def send(self, ac_data: protocol.AcData) -> None:
         self.gw.send(ac_data)
@@ -43,10 +60,10 @@ class HVAC:
 
     def status(self):
         return json.dumps({
-            "switch_status": self.switch_status.name,
+            "switch_status": self.switch_status,
             "target_temperature": self.target_temperature,
-            "current_operation": self.current_operation.name,
-            "current_fan_mode": self.current_fan_mode.name,
+            "current_operation": self.current_operation,
+            "current_fan_mode": self.current_fan_mode,
             "current_temperature": self.current_temperature,
             "error_code": self.error_code
         })
@@ -65,7 +82,7 @@ class HVAC:
 
     @property
     def is_on(self):
-        return self.switch_status == protocol.StatusSwitch.ON
+        return self.switch_status == protocol.StatusSwitch.ON.name
 
     @property
     def min_temp(self):

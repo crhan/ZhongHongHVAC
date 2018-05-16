@@ -1,10 +1,10 @@
 import copy
 import logging
-import struct
 import socket
+import struct
 
-from .protocol import (AcData, AcStatus, ChecksumError, CtlStatus, FuncCode,
-                       Header, AcOnline)
+from .protocol import (AcData, AcOnline, AcStatus, ChecksumError, CtlStatus,
+                       FuncCode, Header)
 
 logger = logging.getLogger(__name__)
 

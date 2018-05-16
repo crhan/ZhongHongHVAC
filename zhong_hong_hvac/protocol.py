@@ -3,7 +3,7 @@ import enum
 import logging
 import struct
 from functools import reduce
-from typing import List, Iterator
+from typing import Iterator, List
 
 import attr
 
@@ -173,6 +173,7 @@ class AcAddr(ZhongHongDataStruct):
     def __str__(self):
         return "AC %s-%s" % (self.addr_out, self.addr_in)
 
+
 @attr.s(slots=True, hash=True)
 class AcOnline(ZhongHongDataStruct):
     addr_out = attr.ib()
@@ -206,8 +207,9 @@ class AcStatus(ZhongHongDataStruct):
 
     def __str__(self):
         return "AC %s-%s power %s, current_operation %s, speed %s, target_temp %s, room_temp %s" % (
-            self.addr_out, self.addr_in, self.switch_status, self.current_operation,
-            self.current_fan_mode, self.target_temperature, self.current_temperature)
+            self.addr_out, self.addr_in, self.switch_status,
+            self.current_operation, self.current_fan_mode,
+            self.target_temperature, self.current_temperature)
 
 
 @attr.s(slots=True)

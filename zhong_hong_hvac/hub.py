@@ -1,9 +1,9 @@
 """Library to handle connection with ZhongHong Gateway."""
 import logging
 import socket
+import time
 from collections import defaultdict
 from threading import Thread
-import time
 from typing import Callable, DefaultDict, List
 
 from . import helper, protocol

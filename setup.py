@@ -16,7 +16,7 @@ setup(
     author_email='crhan123@gmail.com',
     license='Apache',
     classifiers=[
-        'Development Status :: 3 - Beta',
+        'Development Status :: 4 - Beta',
         'Intended Audience :: Developers',
         'License :: OSI Approved :: Apache Software License',
         'Programming Language :: Python :: 3.5',

@@ -16,7 +16,7 @@ setup(
     author_email='crhan123@gmail.com',
     license='Apache',
     classifiers=[
-        'Development Status :: 3 - Alpha',
+        'Development Status :: 3 - Beta',
         'Intended Audience :: Developers',
         'License :: OSI Approved :: Apache Software License',
         'Programming Language :: Python :: 3.5',
@@ -28,14 +28,5 @@ setup(
     packages=["zhong_hong_hvac"],
     python_requires='>=3.5',
     install_requires=[
-        'click',
         'attrs',
-    ],
-    entry_points={
-        'console_scripts': [
-            'mirobo=miio.vacuum_cli:cli', 'miplug=miio.plug_cli:cli',
-            'miceil=miio.ceil_cli:cli', 'mieye=miio.philips_eyecare_cli:cli',
-            'miio-extract-tokens=miio.extract_tokens:main'
-        ],
-    },
-)
+    ])

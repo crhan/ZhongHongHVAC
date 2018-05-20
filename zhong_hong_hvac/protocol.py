@@ -124,6 +124,8 @@ class Header(ZhongHongDataStruct):
             return self._ctl_code
         elif self.func_code == FuncCode.CTL_FAN_MODE:
             return StatusFanMode(self._ctl_code)
+        elif self.func_code == FuncCode.CTL_OPERATION:
+            return StatusOperation(self._ctl_code)
         return None
 
     def __str__(self):

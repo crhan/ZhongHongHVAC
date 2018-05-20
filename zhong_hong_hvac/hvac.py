@@ -24,6 +24,12 @@ class HVAC:
         self.current_fan_mode = None
         self.current_temperature = None
         self.error_code = None
+        self.gw.add_device(self)
+
+    def _call_status_update(self):
+        for func in self.status_callback:
+            if callable(func):
+                func(self)
 
     def _status_update(self, ac_status: protocol.AcStatus) -> bool:
         assert self.ac_addr == ac_status.ac_addr
@@ -37,9 +43,18 @@ class HVAC:
 
         logger.info("[callback]hvac %s status updated: %s", self.ac_addr,
                     self.status())
-        for func in self.status_callback:
-            if callable(func):
-                func(self)
+        self._call_status_update()
+
+    def set_attr(self, func_code, value) -> bool:
+        if func_code == protocol.FuncCode.CTL_POWER:
+            self.switch_status = value.name
+        elif func_code == protocol.FuncCode.CTL_TEMPERATURE:
+            self.target_temperature = value
+        elif func_code == protocol.FuncCode.CTL_OPERATION:
+            self.current_operation = value.name
+        elif func_code == protocol.FuncCode.CTL_FAN_MODE:
+            self.current_fan_mode = value.name
+        self._call_status_update()
 
     def register_update_callback(self, _callable: Callable) -> bool:
         if callable(_callable):
@@ -91,3 +106,27 @@ class HVAC:
     @property
     def max_temp(self):
         return 30
+
+    def _ctrl_ac(self, func_code, ctrl_code):
+        request_data = protocol.AcData()
+        request_data.header = protocol.Header(
+            self.gw_addr, func_code, ctrl_code, protocol.CtlStatus.ONE)
+        request_data.add(self.ac_addr)
+        self.send(request_data)
+
+    def turn_on(self) -> None:
+        self._ctrl_ac(protocol.FuncCode.CTL_POWER, protocol.StatusSwitch.ON)
+
+    def turn_off(self) -> None:
+        self._ctrl_ac(protocol.FuncCode.CTL_POWER, protocol.StatusSwitch.OFF)
+
+    def set_temperature(self, temperature: str) -> None:
+        self._ctrl_ac(protocol.FuncCode.CTL_TEMPERATURE, temperature)
+
+    def set_fan_mode(self, fan_mode: str) -> None:
+        self._ctrl_ac(protocol.FuncCode.CTL_FAN_MODE,
+                      protocol.StatusFanMode[fan_mode])
+
+    def set_operation_mode(self, operation_mode: str) -> None:
+        self._ctrl_ac(protocol.FuncCode.CTL_OPERATION,
+                      protocol.StatusOperation[operation_mode])

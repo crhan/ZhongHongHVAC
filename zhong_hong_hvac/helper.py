@@ -4,7 +4,7 @@ import socket
 import struct
 
 from .protocol import (AcData, AcOnline, AcStatus, ChecksumError, CtlStatus,
-                       FuncCode, Header)
+                       FuncCode, Header, AcAddr)
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +87,18 @@ def parse_data(data_frame):
                 ac_data.add(ac_address)
         else:
             raise TypeError("not support type: %s" % header)
+
+    elif header.func_code in (FuncCode.CTL_POWER, FuncCode.CTL_OPERATION,
+                              FuncCode.CTL_FAN_MODE, FuncCode.CTL_TEMPERATURE):
+        if header.ac_num != 1:
+            raise TypeError("not support ac control more than one: %s",
+                            header.ac_num)
+
+        start = 4
+        end = start + 2
+        ac_addr = AcAddr(*struct.unpack('BB', data_frame[start:end]))
+        ac_data.add(ac_addr)
+
     else:
         raise TypeError("not support type: %s" % header)
 

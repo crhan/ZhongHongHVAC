@@ -6,6 +6,8 @@ from collections import defaultdict
 from threading import Thread
 from typing import Callable, DefaultDict, List
 
+import attr
+
 from . import helper, protocol
 
 logger = logging.getLogger(__name__)
@@ -21,7 +23,7 @@ class ZhongHongGateway:
         self.sock = None
         self.ac_callbacks = defaultdict(
             list)  # type DefaultDict[protocol.AcAddr, List[Callable]]
-
+        self.devices = {}
         self._listening = False
         self._threads = []
 
@@ -44,6 +46,13 @@ class ZhongHongGateway:
                             func: Callable) -> None:
         logger.debug("%s adding status callback", ac_addr)
         self.ac_callbacks[ac_addr].append(func)
+
+    def add_device(self, device) -> None:
+        logger.debug("device %s add to hub %s", device.ac_addr, self.gw_addr)
+        self.devices[attr.astuple(device.ac_addr)] = device
+
+    def get_device(self, addr: protocol.AcAddr):
+        return self.devices.get(attr.astuple(addr))
 
     def query_status(self, ac_addr: protocol.AcAddr) -> bool:
         message = protocol.AcData()
@@ -107,11 +116,24 @@ class ZhongHongGateway:
             for ac_data in helper.get_ac_data(data):
                 logger.debug("get ac_data << %s", ac_data)
 
-                for payload in ac_data:
-                    if isinstance(payload, protocol.AcStatus):
+                if ac_data.func_code == protocol.FuncCode.STATUS:
+                    for payload in ac_data:
+                        if not isinstance(payload, protocol.AcStatus):
+                            continue
+
                         logger.debug("get payload << %s", payload)
                         for func in self.ac_callbacks[payload.ac_addr]:
                             func(payload)
+
+                elif ac_data.func_code in (protocol.FuncCode.CTL_POWER,
+                                           protocol.FuncCode.CTL_TEMPERATURE,
+                                           protocol.FuncCode.CTL_OPERATION,
+                                           protocol.FuncCode.CTL_FAN_MODE):
+                    header = ac_data.header
+                    for payload in ac_data:
+                        device = self.get_device(payload)
+                        device.set_attr(header.func_code, header.ctl_code)
+
 
     def start_listen(self):
         """Start listening."""

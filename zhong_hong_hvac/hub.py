@@ -74,6 +74,11 @@ class ZhongHongGateway:
                          self.port)
             return None
 
+        except OSError as e:
+            if e.errno == 32:  # Broken pipe
+                logger.error("OSError 32 raise, Broken pipe", exc_info=e)
+            self.open_socket()
+
     def _validate_data(self, data):
         if data is None:
             logger.error('No data in response from hub %s', data)

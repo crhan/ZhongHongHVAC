@@ -26,6 +26,7 @@ class ZhongHongGateway:
         self.devices = {}
         self._listening = False
         self._threads = []
+        self.max_retry = 5
 
     def __get_socket(self) -> socket.socket:
         logger.debug("Opening socket to (%s, %s)", self.ip_addr, self.port)
@@ -63,21 +64,26 @@ class ZhongHongGateway:
         return self.send(message)
 
     def send(self, ac_data: protocol.AcData) -> None:
-        try:
-            self.sock.settimeout(10.0)
-            logger.debug("send >> %s", ac_data.hex())
-            self.sock.send(ac_data.encode())
-            self.sock.settimeout(None)
+        retry_count = 0
+        def _send():
+            try:
+                self.sock.settimeout(10.0)
+                logger.debug("send >> %s", ac_data.hex())
+                self.sock.send(ac_data.encode())
+                self.sock.settimeout(None)
 
-        except socket.timeout:
-            logger.error("Connot connect to gateway %s:%s", self.ip_addr,
-                         self.port)
-            return None
+            except socket.timeout:
+                logger.error("Connot connect to gateway %s:%s", self.ip_addr,
+                            self.port)
+                return
 
-        except OSError as e:
-            if e.errno == 32:  # Broken pipe
-                logger.error("OSError 32 raise, Broken pipe", exc_info=e)
-            self.open_socket()
+            except OSError as e:
+                if e.errno == 32:  # Broken pipe
+                    logger.error("OSError 32 raise, Broken pipe", exc_info=e)
+                if retry_count < self.max_retry:
+                    self.open_socket()
+                    _send()
+        _send()
 
     def _validate_data(self, data):
         if data is None:

@@ -45,7 +45,7 @@ class StatusSwitch(enum.Enum):
 class StatusOperation(enum.Enum):
     COLD = 0x01
     DEHUMIDIFY = 0x02
-    BLAST = 0x04
+    FAN_ONLY = 0x04
     HEAT = 0x08
 
 

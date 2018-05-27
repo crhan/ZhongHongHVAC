@@ -33,17 +33,24 @@ class HVAC:
 
     def _status_update(self, ac_status: protocol.AcStatus) -> bool:
         assert self.ac_addr == ac_status.ac_addr
+        dirty = False
         for _attr in ("switch_status", "target_temperature",
                       "current_operation", "current_fan_mode",
                       "current_temperature", "error_code"):
             value = getattr(ac_status, _attr)
             if isinstance(value, enum.Enum):
                 value = value.name
-            setattr(self, _attr, value)
+            if getattr(self, _attr) != value:
+                setattr(self, _attr, value)
+                dirty = True
 
-        logger.debug("[callback]hvac %s status updated: %s", self.ac_addr,
-                    self.status())
-        self._call_status_update()
+        if dirty:
+            logger.debug("[callback]hvac %s status updated: %s", self.ac_addr,
+                         self.status())
+            self._call_status_update()
+        else:
+            logger.debug("[callback]hvac %s status remains the same: %s",
+                         self.ac_addr, self.status())
 
     def set_attr(self, func_code, value) -> bool:
         if func_code == protocol.FuncCode.CTL_POWER:

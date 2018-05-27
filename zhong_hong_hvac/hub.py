@@ -101,6 +101,9 @@ class ZhongHongGateway:
         return True
 
     def _get_data(self):
+        if self.sock is None:
+            self.open_socket()
+
         try:
             return self.sock.recv(SOCKET_BUFSIZE)
 

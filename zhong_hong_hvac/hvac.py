@@ -41,7 +41,7 @@ class HVAC:
                 value = value.name
             setattr(self, _attr, value)
 
-        logger.info("[callback]hvac %s status updated: %s", self.ac_addr,
+        logger.debug("[callback]hvac %s status updated: %s", self.ac_addr,
                     self.status())
         self._call_status_update()
 

@@ -71,8 +71,6 @@ class ZhongHongGateway:
         return self.send(message)
 
     def send(self, ac_data: protocol.AcData) -> None:
-        retry_count = 0
-
         def _send(retry_count):
             try:
                 self.sock.settimeout(10.0)
@@ -93,7 +91,7 @@ class ZhongHongGateway:
                     self.open_socket()
                     _send(retry_count)
 
-        _send(retry_count)
+        _send(0)
 
     def _validate_data(self, data):
         if data is None:
@@ -111,7 +109,7 @@ class ZhongHongGateway:
             self.open_socket()
 
         except socket.timeout as e:
-            logger.error(e)
+            logger.error("timeout error", exc_info=e)
 
         except OSError as e:
             if e.errno == 9:  # when socket close, errorno 9 will raise
@@ -120,7 +118,7 @@ class ZhongHongGateway:
             else:
                 logger.error("unknown error when recv", exc_info=e)
 
-        except Exception:
+        except Exception as e:
             logger.error("unknown error when recv", exc_info=e)
 
         return None

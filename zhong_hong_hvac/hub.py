@@ -32,9 +32,9 @@ class ZhongHongGateway:
     def __get_socket(self) -> socket.socket:
         logger.debug("Opening socket to (%s, %s)", self.ip_addr, self.port)
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        if platform == 'linux2':
+        if platform == ('linux', 'linux2'):
             s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 1)  # pylint: disable=E1101
-        if platform in ('darwin', 'linux2'):
+        if platform in ('darwin', 'linux', 'linux2'):
             s.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
             s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 3)
             s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 5)

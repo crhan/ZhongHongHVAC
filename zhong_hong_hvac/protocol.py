@@ -215,7 +215,7 @@ class AcStatus(ZhongHongDataStruct):
 
 
 @attr.s(slots=True)
-class AcData(collections.Iterable):
+class AcData(collections.abc.Iterable):
     header = attr.ib(init=False)  # type: Header
     payload = attr.ib(
         attr.Factory(collections.deque),

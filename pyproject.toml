@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "zhong-hong-hvac"
-version = "1.0.9"
+version = "1.0.10"
 description = "Python library for interfacing with ZhongHong HVAC controller"
 authors = ["ruohan.chen <crhan123@gmail.com>"]
 license = "Apache"
@@ -25,7 +25,7 @@ python = "^3.9"
 attrs = "^23.1.0"
 
 [tool.poetry.group.dev.dependencies]
-ipython = "^8.17.2"
+pdbpp = "^0.10.3"
 
 
 [tool.poetry.group.test.dependencies]

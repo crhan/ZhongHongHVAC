@@ -117,6 +117,7 @@ class ZhongHongGateway:
 
         except socket.timeout as e:
             logger.error("timeout error", exc_info=e)
+            self.open_socket()
 
         except OSError as e:
             if e.errno == 9:  # when socket close, errorno 9 will raise
@@ -125,42 +126,46 @@ class ZhongHongGateway:
             else:
                 logger.error("unknown error when recv", exc_info=e)
 
+            self.open_socket()
+
         except Exception as e:
             logger.error("unknown error when recv", exc_info=e)
+            self.open_socket()
 
         return None
 
-    def _listen_to_msg(self):
+    def thread_main(self):
         while self._listening:
             data = self._get_data()
-
             if not data:
                 continue
+            self._listen_to_msg(data)
 
-            logger.debug("recv data << %s", protocol.bytes_debug_str(data))
+    def _listen_to_msg(self, data):
+        logger.debug("recv data << %s", protocol.bytes_debug_str(data))
 
-            for ac_data in helper.get_ac_data(data):
-                logger.debug("get ac_data << %s", ac_data)
+        for ac_data in helper.get_ac_data(data):
+            logger.debug("get ac_data << %s", ac_data)
 
-                if ac_data.func_code == protocol.FuncCode.STATUS:
-                    for payload in ac_data:
-                        if not isinstance(payload, protocol.AcStatus):
-                            continue
+            if ac_data.func_code == protocol.FuncCode.STATUS:
+                for payload in ac_data:
+                    if not isinstance(payload, protocol.AcStatus):
+                        continue
 
-                        logger.debug("get payload << %s", payload)
-                        for func in self.ac_callbacks[payload.ac_addr]:
-                            func(payload)
+                    logger.debug("get payload << %s", payload)
+                    for func in self.ac_callbacks[payload.ac_addr]:
+                        func(payload)
 
-                elif ac_data.func_code in (
-                    protocol.FuncCode.CTL_POWER,
-                    protocol.FuncCode.CTL_TEMPERATURE,
-                    protocol.FuncCode.CTL_OPERATION,
-                    protocol.FuncCode.CTL_FAN_MODE,
-                ):
-                    header = ac_data.header
-                    for payload in ac_data:
-                        device = self.get_device(payload)
-                        device.set_attr(header.func_code, header.ctl_code)
+            elif ac_data.func_code in (
+                protocol.FuncCode.CTL_POWER,
+                protocol.FuncCode.CTL_TEMPERATURE,
+                protocol.FuncCode.CTL_OPERATION,
+                protocol.FuncCode.CTL_FAN_MODE,
+            ):
+                header = ac_data.header
+                for payload in ac_data:
+                    device = self.get_device(payload)
+                    device.set_attr(header.func_code, header.ctl_code)
 
     def start_listen(self):
         """Start listening."""

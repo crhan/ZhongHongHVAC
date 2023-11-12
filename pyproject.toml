@@ -1,0 +1,43 @@
+[tool.poetry]
+name = "zhong-hong-hvac"
+version = "1.0.9"
+description = "Python library for interfacing with ZhongHong HVAC controller"
+authors = ["ruohan.chen <crhan123@gmail.com>"]
+license = "Apache"
+readme = "README.md"
+packages = [{include = "zhong_hong_hvac"}]
+classifiers = [
+        'Development Status :: 4 - Beta',
+        'Intended Audience :: Developers',
+        'License :: OSI Approved :: Apache Software License',
+        'Programming Language :: Python :: 3.5',
+        'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.10',
+        'Programming Language :: Python :: 3.11',
+        'Programming Language :: Python :: 3 :: Only',
+]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+attrs = "^23.1.0"
+
+[tool.poetry.group.dev.dependencies]
+ipython = "^8.17.2"
+
+
+[tool.poetry.group.test.dependencies]
+pytest = "^7.4.3"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.urls]
+repository = "https://github.com/crhan/ZhongHongHVAC"
+homepage = "https://pypi.org/project/zhong-hong-hvac"
+
+[tool.isort]
+profile = "black"

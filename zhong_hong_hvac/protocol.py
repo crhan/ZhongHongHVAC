@@ -53,6 +53,8 @@ class StatusFanMode(enum.Enum):
     HIGH = 0x01
     MID = 0x02
     LOW = 0x04
+    MIDHIGH = 0x03
+    MIDLOW = 0x05
 
 
 STATUS_PAYLOAD_LEN = 10

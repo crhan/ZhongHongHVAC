@@ -23,7 +23,8 @@ class ZhongHongGateway:
         self.port = port
         self.sock = None
         self.ac_callbacks = defaultdict(
-            list)  # type DefaultDict[protocol.AcAddr, List[Callable]]
+            list
+        )  # type DefaultDict[protocol.AcAddr, List[Callable]]
         self.devices = {}
         self._listening = False
         self._threads = []
@@ -32,9 +33,11 @@ class ZhongHongGateway:
     def __get_socket(self) -> socket.socket:
         logger.debug("Opening socket to (%s, %s)", self.ip_addr, self.port)
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        if platform in ('linux', 'linux2'):
-            s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 1)  # pylint: disable=E1101
-        if platform in ('darwin', 'linux', 'linux2'):
+        if platform in ("linux", "linux2"):
+            s.setsockopt(
+                socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 1
+            )  # pylint: disable=E1101
+        if platform in ("darwin", "linux", "linux2"):
             s.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
             s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 3)
             s.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 5)
@@ -50,8 +53,7 @@ class ZhongHongGateway:
         self.sock = self.__get_socket()
         return self.sock
 
-    def add_status_callback(self, ac_addr: protocol.AcAddr,
-                            func: Callable) -> None:
+    def add_status_callback(self, ac_addr: protocol.AcAddr, func: Callable) -> None:
         logger.debug("%s adding status callback", ac_addr)
         self.ac_callbacks[ac_addr].append(func)
 
@@ -64,9 +66,12 @@ class ZhongHongGateway:
 
     def query_status(self, ac_addr: protocol.AcAddr) -> bool:
         message = protocol.AcData()
-        message.header = protocol.Header(self.gw_addr,
-                                         protocol.FuncCode.STATUS.value,
-                                         protocol.CtlStatus.ONE.value, 1)
+        message.header = protocol.Header(
+            self.gw_addr,
+            protocol.FuncCode.STATUS.value,
+            protocol.CtlStatus.ONE.value,
+            1,
+        )
         message.add(ac_addr)
         return self.send(message)
 
@@ -79,8 +84,7 @@ class ZhongHongGateway:
                 self.sock.settimeout(None)
 
             except socket.timeout:
-                logger.error("Connot connect to gateway %s:%s", self.ip_addr,
-                             self.port)
+                logger.error("Connot connect to gateway %s:%s", self.ip_addr, self.port)
                 return
 
             except OSError as e:
@@ -95,7 +99,7 @@ class ZhongHongGateway:
 
     def _validate_data(self, data):
         if data is None:
-            logger.error('No data in response from hub %s', data)
+            logger.error("No data in response from hub %s", data)
             return False
 
         return True
@@ -147,10 +151,12 @@ class ZhongHongGateway:
                         for func in self.ac_callbacks[payload.ac_addr]:
                             func(payload)
 
-                elif ac_data.func_code in (protocol.FuncCode.CTL_POWER,
-                                           protocol.FuncCode.CTL_TEMPERATURE,
-                                           protocol.FuncCode.CTL_OPERATION,
-                                           protocol.FuncCode.CTL_FAN_MODE):
+                elif ac_data.func_code in (
+                    protocol.FuncCode.CTL_POWER,
+                    protocol.FuncCode.CTL_TEMPERATURE,
+                    protocol.FuncCode.CTL_OPERATION,
+                    protocol.FuncCode.CTL_FAN_MODE,
+                ):
                     header = ac_data.header
                     for payload in ac_data:
                         device = self.get_device(payload)
@@ -177,7 +183,7 @@ class ZhongHongGateway:
         logger.debug("Stopping hub %s", self.gw_addr)
         self._listening = False
         if self.sock:
-            logger.info('Closing socket.')
+            logger.info("Closing socket.")
             self.sock.close()
             self.sock = None
 
@@ -193,9 +199,12 @@ class ZhongHongGateway:
         ret = []
         request_data = protocol.AcData()
         request_data.header = protocol.Header(
-            self.gw_addr, protocol.FuncCode.STATUS, protocol.CtlStatus.ONLINE,
-            protocol.CtlStatus.ALL)
-        request_data.add(protocol.AcAddr(0xff, 0xff))
+            self.gw_addr,
+            protocol.FuncCode.STATUS,
+            protocol.CtlStatus.ONLINE,
+            protocol.CtlStatus.ALL,
+        )
+        request_data.add(protocol.AcAddr(0xFF, 0xFF))
 
         discovered = False
         count_down = 10
@@ -210,8 +219,11 @@ class ZhongHongGateway:
 
             for ac_data in helper.get_ac_data(data):
                 if ac_data.header != request_data.header:
-                    logger.debug("header not match: %s != %s",
-                                 request_data.header, ac_data.header)
+                    logger.debug(
+                        "header not match: %s != %s",
+                        request_data.header,
+                        ac_data.header,
+                    )
                     continue
 
                 for ac_online in ac_data:
@@ -225,9 +237,13 @@ class ZhongHongGateway:
     def query_all_status(self) -> None:
         request_data = protocol.AcData()
         request_data.header = protocol.Header(
-            self.gw_addr, protocol.FuncCode.STATUS, protocol.CtlStatus.ALL,
-            protocol.CtlStatus.ALL)
+            self.gw_addr,
+            protocol.FuncCode.STATUS,
+            protocol.CtlStatus.ALL,
+            protocol.CtlStatus.ALL,
+        )
         request_data.add(
-            protocol.AcAddr(protocol.CtlStatus.ALL, protocol.CtlStatus.ALL))
+            protocol.AcAddr(protocol.CtlStatus.ALL, protocol.CtlStatus.ALL)
+        )
 
         self.send(request_data)

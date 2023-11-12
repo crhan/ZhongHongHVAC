@@ -1,10 +1,17 @@
 import copy
 import logging
-import socket
 import struct
 
-from .protocol import (AcData, AcOnline, AcStatus, ChecksumError, CtlStatus,
-                       FuncCode, Header, AcAddr)
+from .protocol import (
+    AcAddr,
+    AcData,
+    AcOnline,
+    AcStatus,
+    ChecksumError,
+    CtlStatus,
+    FuncCode,
+    Header,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -15,11 +22,16 @@ def validate(data_frame):
     if not header.is_valid:
         return False
 
-    data_checksum = sum(
-        struct.unpack('B' * header.checksum_position,
-                      data_frame[:header.checksum_position])) % 256
+    data_checksum = (
+        sum(
+            struct.unpack(
+                "B" * header.checksum_position, data_frame[: header.checksum_position]
+            )
+        )
+        % 256
+    )
     pos = header.checksum_position
-    data_checksum = struct.unpack('B', data_frame[pos:pos + 1])[0]
+    data_checksum = struct.unpack("B", data_frame[pos : pos + 1])[0]
     return data_checksum == data_checksum
 
 
@@ -75,28 +87,29 @@ def parse_data(data_frame):
             for idx in range(header.ac_num):
                 start = 4 + idx * 10
                 end = 4 + (idx + 1) * 10
-                ac_status = AcStatus(
-                    *struct.unpack('B' * 10, data_frame[start:end]))
+                ac_status = AcStatus(*struct.unpack("B" * 10, data_frame[start:end]))
                 ac_data.add(ac_status)
         elif header.ctl_code == CtlStatus.ONLINE:
             for idx in range(header.ac_num):
                 start = 4 + idx * 3
                 end = 4 + (idx + 1) * 3
-                ac_address = AcOnline(
-                    *struct.unpack('BBB', data_frame[start:end]))
+                ac_address = AcOnline(*struct.unpack("BBB", data_frame[start:end]))
                 ac_data.add(ac_address)
         else:
             raise TypeError("not support type: %s" % header)
 
-    elif header.func_code in (FuncCode.CTL_POWER, FuncCode.CTL_OPERATION,
-                              FuncCode.CTL_FAN_MODE, FuncCode.CTL_TEMPERATURE):
+    elif header.func_code in (
+        FuncCode.CTL_POWER,
+        FuncCode.CTL_OPERATION,
+        FuncCode.CTL_FAN_MODE,
+        FuncCode.CTL_TEMPERATURE,
+    ):
         if header.ac_num != 1:
-            raise TypeError("not support ac control more than one: %s",
-                            header.ac_num)
+            raise TypeError("not support ac control more than one: %s", header.ac_num)
 
         start = 4
         end = start + 2
-        ac_addr = AcAddr(*struct.unpack('BB', data_frame[start:end]))
+        ac_addr = AcAddr(*struct.unpack("BB", data_frame[start:end]))
         ac_data.add(ac_addr)
 
     else:

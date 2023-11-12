@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 def bytes_debug_str(data: bytes):
-    return '[%s]' % ' '.join([hex(x) for x in bytearray(data)])
+    return "[%s]" % " ".join([hex(x) for x in bytearray(data)])
 
 
 class ChecksumError(Exception):
@@ -28,9 +28,9 @@ class FuncCode(enum.Enum):
 
 class CtlStatus(enum.Enum):
     ONE = 0x01
-    MULTI = 0x0f
+    MULTI = 0x0F
     ONLINE = 0x02
-    ALL = 0xff
+    ALL = 0xFF
 
 
 class StatusSwitch(enum.Enum):
@@ -130,13 +130,16 @@ class Header(ZhongHongDataStruct):
 
     def __str__(self):
         return "Header: gw_addr %s, func: %s, ctl: %s, ac_num: %s" % (
-            self.gw_addr, self.func_code, self.ctl_code, self.ac_num)
+            self.gw_addr,
+            self.func_code,
+            self.ctl_code,
+            self.ac_num,
+        )
 
     def is_status_update(self):
         if self.func_code != FuncCode.STATUS:
             return False
-        if self.ctl_code not in (CtlStatus.ALL, CtlStatus.ONE,
-                                 CtlStatus.MULTI):
+        if self.ctl_code not in (CtlStatus.ALL, CtlStatus.ONE, CtlStatus.MULTI):
             return False
         return True
 
@@ -147,15 +150,18 @@ class Header(ZhongHongDataStruct):
     @property
     def payload_length(self):
         if self.func_code == FuncCode.STATUS:
-            if self.ctl_code in (CtlStatus.ONE, CtlStatus.MULTI,
-                                 CtlStatus.ALL):
+            if self.ctl_code in (CtlStatus.ONE, CtlStatus.MULTI, CtlStatus.ALL):
                 payload_length = STATUS_PAYLOAD_LEN * self.ac_num
             elif self.ctl_code == CtlStatus.ONLINE:
                 payload_length = STATUS_ONLINE_PAYLOAD_LEN * self.ac_num
             else:
                 raise Exception("unknown ctrl code: %s", self.header.export())
-        elif self.func_code in (FuncCode.CTL_POWER, FuncCode.CTL_TEMPERATURE,
-                                FuncCode.CTL_OPERATION, FuncCode.CTL_FAN_MODE):
+        elif self.func_code in (
+            FuncCode.CTL_POWER,
+            FuncCode.CTL_TEMPERATURE,
+            FuncCode.CTL_OPERATION,
+            FuncCode.CTL_FAN_MODE,
+        ):
             payload_length = AC_ADDR_LEN * self.ac_num
         else:
             raise Exception("unknown func code: %s", self.header.export())
@@ -208,25 +214,33 @@ class AcStatus(ZhongHongDataStruct):
         return AcAddr(self.addr_out, self.addr_in)
 
     def __str__(self):
-        return "AC %s-%s power %s, current_operation %s, speed %s, target_temp %s, room_temp %s" % (
-            self.addr_out, self.addr_in, self.switch_status,
-            self.current_operation, self.current_fan_mode,
-            self.target_temperature, self.current_temperature)
+        return (
+            "AC %s-%s power %s, current_operation %s, speed %s, target_temp %s, room_temp %s"
+            % (
+                self.addr_out,
+                self.addr_in,
+                self.switch_status,
+                self.current_operation,
+                self.current_fan_mode,
+                self.target_temperature,
+                self.current_temperature,
+            )
+        )
 
 
 @attr.s(slots=True)
 class AcData(collections.abc.Iterable):
     header = attr.ib(init=False)  # type: Header
     payload = attr.ib(
-        attr.Factory(collections.deque),
-        init=False)  # type: List[ZhongHongDataStruct]
+        attr.Factory(collections.deque), init=False
+    )  # type: List[ZhongHongDataStruct]
     request = attr.ib(True)
 
     def add(self, data):
         self.payload.append(data)
 
     def __str__(self):
-        return '\n'.join([str(self.header)] + [str(x) for x in self.payload])
+        return "\n".join([str(self.header)] + [str(x) for x in self.payload])
 
     def __iter__(self) -> Iterator[ZhongHongDataStruct]:
         yield from iter(self.payload)
@@ -237,15 +251,18 @@ class AcData(collections.abc.Iterable):
         checksum_length = 1
 
         if self.func_code == FuncCode.STATUS:
-            if self.ctl_code in (CtlStatus.ONE, CtlStatus.MULTI,
-                                 CtlStatus.ALL):
+            if self.ctl_code in (CtlStatus.ONE, CtlStatus.MULTI, CtlStatus.ALL):
                 payload_length = STATUS_PAYLOAD_LEN * self.ac_num
             elif self.ctl_code in (CtlStatus.ONLINE):
                 payload_length = STATUS_ONLINE_PAYLOAD_LEN * self.ac_num
             else:
                 raise Exception("unknown ctrl code: %s", self.header.export())
-        elif self.func_code in (FuncCode.CTL_POWER, FuncCode.CTL_TEMPERATURE,
-                                FuncCode.CTL_OPERATION, FuncCode.CTL_FAN_MODE):
+        elif self.func_code in (
+            FuncCode.CTL_POWER,
+            FuncCode.CTL_TEMPERATURE,
+            FuncCode.CTL_OPERATION,
+            FuncCode.CTL_FAN_MODE,
+        ):
             payload_length = AcAddr * self.ac_num
         else:
             raise Exception("unknown func code: %s", self.header.export())
@@ -266,22 +283,25 @@ class AcData(collections.abc.Iterable):
 
     @property
     def is_request(self):
-        '''Is this data a Request or Response.'''
+        """Is this data a Request or Response."""
         return self.request
 
     @property
     def checksum(self):
-        return (self.header.checksum +
-                sum([item.checksum for item in self.payload])) % 256
+        return (
+            self.header.checksum + sum([item.checksum for item in self.payload])
+        ) % 256
 
     @property
     def bin_checksum(self):
-        return struct.pack('B', self.checksum)
+        return struct.pack("B", self.checksum)
 
     def encode(self):
-        return b''.join([self.header.encode()] +
-                        [x.encode()
-                         for x in self.payload] + [self.bin_checksum])
+        return b"".join(
+            [self.header.encode()]
+            + [x.encode() for x in self.payload]
+            + [self.bin_checksum]
+        )
 
     def hex(self):
         return bytes_debug_str(self.encode())

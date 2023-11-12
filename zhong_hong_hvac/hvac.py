@@ -34,9 +34,14 @@ class HVAC:
     def _status_update(self, ac_status: protocol.AcStatus) -> bool:
         assert self.ac_addr == ac_status.ac_addr
         dirty = False
-        for _attr in ("switch_status", "target_temperature",
-                      "current_operation", "current_fan_mode",
-                      "current_temperature", "error_code"):
+        for _attr in (
+            "switch_status",
+            "target_temperature",
+            "current_operation",
+            "current_fan_mode",
+            "current_temperature",
+            "error_code",
+        ):
             value = getattr(ac_status, _attr)
             if isinstance(value, enum.Enum):
                 value = value.name
@@ -45,12 +50,16 @@ class HVAC:
                 dirty = True
 
         if dirty:
-            logger.debug("[callback]hvac %s status updated: %s", self.ac_addr,
-                         self.status())
+            logger.debug(
+                "[callback]hvac %s status updated: %s", self.ac_addr, self.status()
+            )
             self._call_status_update()
         else:
-            logger.debug("[callback]hvac %s status remains the same: %s",
-                         self.ac_addr, self.status())
+            logger.debug(
+                "[callback]hvac %s status remains the same: %s",
+                self.ac_addr,
+                self.status(),
+            )
 
     def set_attr(self, func_code, value) -> bool:
         if func_code == protocol.FuncCode.CTL_POWER:
@@ -75,20 +84,23 @@ class HVAC:
     def update(self) -> bool:
         message = protocol.AcData()
         message.header = protocol.Header(
-            self.gw_addr, protocol.FuncCode.STATUS, protocol.CtlStatus.ONE, 1)
+            self.gw_addr, protocol.FuncCode.STATUS, protocol.CtlStatus.ONE, 1
+        )
         message.add(self.ac_addr)
         self.gw.query_status(self.ac_addr)
         return True
 
     def status(self):
-        return json.dumps({
-            "switch_status": self.switch_status,
-            "target_temperature": self.target_temperature,
-            "current_operation": self.current_operation,
-            "current_fan_mode": self.current_fan_mode,
-            "current_temperature": self.current_temperature,
-            "error_code": self.error_code
-        })
+        return json.dumps(
+            {
+                "switch_status": self.switch_status,
+                "target_temperature": self.target_temperature,
+                "current_operation": self.current_operation,
+                "current_fan_mode": self.current_fan_mode,
+                "current_temperature": self.current_temperature,
+                "error_code": self.error_code,
+            }
+        )
 
     @property
     def operation_list(self):
@@ -117,7 +129,8 @@ class HVAC:
     def _ctrl_ac(self, func_code, ctrl_code):
         request_data = protocol.AcData()
         request_data.header = protocol.Header(
-            self.gw_addr, func_code, ctrl_code, protocol.CtlStatus.ONE)
+            self.gw_addr, func_code, ctrl_code, protocol.CtlStatus.ONE
+        )
         request_data.add(self.ac_addr)
         self.send(request_data)
 
@@ -131,9 +144,9 @@ class HVAC:
         self._ctrl_ac(protocol.FuncCode.CTL_TEMPERATURE, temperature)
 
     def set_fan_mode(self, fan_mode: str) -> None:
-        self._ctrl_ac(protocol.FuncCode.CTL_FAN_MODE,
-                      protocol.StatusFanMode[fan_mode])
+        self._ctrl_ac(protocol.FuncCode.CTL_FAN_MODE, protocol.StatusFanMode[fan_mode])
 
     def set_operation_mode(self, operation_mode: str) -> None:
-        self._ctrl_ac(protocol.FuncCode.CTL_OPERATION,
-                      protocol.StatusOperation[operation_mode])
+        self._ctrl_ac(
+            protocol.FuncCode.CTL_OPERATION, protocol.StatusOperation[operation_mode]
+        )

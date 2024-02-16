@@ -3,7 +3,7 @@ import enum
 import logging
 import struct
 from functools import reduce
-from typing import Iterator, List
+from typing import Iterator
 
 import attr
 

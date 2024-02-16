@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "zhong-hong-hvac"
-version = "1.0.11"
+version = "1.0.12"
 description = "Python library for interfacing with ZhongHong HVAC controller"
 authors = ["ruohan.chen <crhan123@gmail.com>"]
 license = "Apache"
@@ -17,6 +17,7 @@ classifiers = [
         'Programming Language :: Python :: 3.9',
         'Programming Language :: Python :: 3.10',
         'Programming Language :: Python :: 3.11',
+        'Programming Language :: Python :: 3.12',
         'Programming Language :: Python :: 3 :: Only',
 ]
 

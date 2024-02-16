@@ -177,7 +177,7 @@ class ZhongHongGateway:
             self.open_socket()
 
         self._listening = True
-        thread = Thread(target=self._listen_to_msg, args=())
+        thread = Thread(target=self.thread_main, args=())
         self._threads.append(thread)
         thread.daemon = True
         thread.start()

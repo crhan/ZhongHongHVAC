@@ -1,4 +1,5 @@
 """Library to handle connection with ZhongHong Gateway."""
+
 import logging
 import socket
 import time

@@ -5,7 +5,7 @@ import socket
 import time
 from collections import defaultdict
 from sys import platform
-from threading import Thread
+from threading import RLock, Thread
 from typing import Callable, DefaultDict, List
 
 import attr
@@ -30,6 +30,8 @@ class ZhongHongGateway:
         self._listening = False
         self._threads = []
         self.max_retry = 5
+        self._connect_retry_delay = 1
+        self._socket_lock = RLock()
 
     def __get_socket(self) -> socket.socket:
         logger.debug("Opening socket to (%s, %s)", self.ip_addr, self.port)
@@ -46,13 +48,34 @@ class ZhongHongGateway:
         return s
 
     def open_socket(self):
-        if self.sock:
-            self.sock.close()
-            self.sock = None
-            time.sleep(1)
+        with self._socket_lock:
+            if self.sock:
+                self.sock.close()
+                self.sock = None
+                time.sleep(self._connect_retry_delay)
 
-        self.sock = self.__get_socket()
-        return self.sock
+            self.sock = self.__get_socket()
+            return self.sock
+
+    def _ensure_socket(self):
+        with self._socket_lock:
+            if self.sock is None:
+                return self.open_socket()
+            return self.sock
+
+    def _reconnect_socket(self, failed_sock=None):
+        with self._socket_lock:
+            if failed_sock is not None and self.sock is not failed_sock:
+                return self.sock
+            return self.open_socket()
+
+    def _try_reconnect_socket(self, failed_sock=None):
+        try:
+            return self._reconnect_socket(failed_sock)
+        except OSError as e:
+            logger.error("Cannot reconnect to gateway", exc_info=e)
+            time.sleep(self._connect_retry_delay)
+            return None
 
     def add_status_callback(self, ac_addr: protocol.AcAddr, func: Callable) -> None:
         logger.debug("%s adding status callback", ac_addr)
@@ -77,26 +100,37 @@ class ZhongHongGateway:
         return self.send(message)
 
     def send(self, ac_data: protocol.AcData) -> None:
-        def _send(retry_count):
+        encoded_data = ac_data.encode()
+        for retry_count in range(self.max_retry + 1):
+            sock = None
             try:
-                self.sock.settimeout(10.0)
+                sock = self._ensure_socket()
+                sock.settimeout(10.0)
                 logger.debug("send >> %s", ac_data.hex())
-                self.sock.send(ac_data.encode())
-                self.sock.settimeout(None)
+                sock.sendall(encoded_data)
+                sock.settimeout(None)
+                return True
 
             except socket.timeout:
-                logger.error("Connot connect to gateway %s:%s", self.ip_addr, self.port)
-                return
+                logger.error("Cannot send to gateway %s:%s", self.ip_addr, self.port)
 
             except OSError as e:
                 if e.errno == 32:  # Broken pipe
                     logger.error("OSError 32 raise, Broken pipe", exc_info=e)
-                if retry_count < self.max_retry:
-                    retry_count += 1
-                    self.open_socket()
-                    _send(retry_count)
+                else:
+                    logger.error("socket error when send", exc_info=e)
 
-        _send(0)
+            finally:
+                if sock is not None:
+                    try:
+                        sock.settimeout(None)
+                    except OSError:
+                        pass
+
+            if retry_count < self.max_retry:
+                self._try_reconnect_socket(sock)
+
+        return False
 
     def _validate_data(self, data):
         if data is None:
@@ -106,19 +140,30 @@ class ZhongHongGateway:
         return True
 
     def _get_data(self):
-        if self.sock is None:
-            self.open_socket()
+        try:
+            sock = self._ensure_socket()
+        except OSError as e:
+            logger.error(
+                "Cannot connect to gateway %s:%s", self.ip_addr, self.port, exc_info=e
+            )
+            time.sleep(self._connect_retry_delay)
+            return None
 
         try:
-            return self.sock.recv(SOCKET_BUFSIZE)
+            data = sock.recv(SOCKET_BUFSIZE)
+            if data == b"":
+                logger.debug("Connection closed by gateway")
+                self._try_reconnect_socket(sock)
+                return None
+            return data
 
         except ConnectionResetError:
             logger.debug("Connection reset by peer")
-            self.open_socket()
+            self._try_reconnect_socket(sock)
 
         except socket.timeout as e:
             logger.error("timeout error", exc_info=e)
-            self.open_socket()
+            self._try_reconnect_socket(sock)
 
         except OSError as e:
             if e.errno == 9:  # when socket close, errorno 9 will raise
@@ -127,11 +172,11 @@ class ZhongHongGateway:
             else:
                 logger.error("unknown error when recv", exc_info=e)
 
-            self.open_socket()
+            self._try_reconnect_socket(sock)
 
         except Exception as e:
             logger.error("unknown error when recv", exc_info=e)
-            self.open_socket()
+            self._try_reconnect_socket(sock)
 
         return None
 

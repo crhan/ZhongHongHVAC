@@ -87,8 +87,12 @@ class HVAC:
             self.gw_addr, protocol.FuncCode.STATUS, protocol.CtlStatus.ONE, 1
         )
         message.add(self.ac_addr)
-        self.gw.query_status(self.ac_addr)
-        return True
+        return self.gw.query_status(self.ac_addr)
+
+    @property
+    def connected(self) -> bool:
+        """Whether the gateway this device is attached to is healthy."""
+        return self.gw.connected
 
     def status(self):
         return json.dumps(
@@ -126,27 +130,29 @@ class HVAC:
     def max_temp(self):
         return 30
 
-    def _ctrl_ac(self, func_code, ctrl_code):
+    def _ctrl_ac(self, func_code, ctrl_code) -> bool:
         request_data = protocol.AcData()
         request_data.header = protocol.Header(
             self.gw_addr, func_code, ctrl_code, protocol.CtlStatus.ONE
         )
         request_data.add(self.ac_addr)
-        self.send(request_data)
+        return self.send(request_data)
 
-    def turn_on(self) -> None:
-        self._ctrl_ac(protocol.FuncCode.CTL_POWER, protocol.StatusSwitch.ON)
+    def turn_on(self) -> bool:
+        return self._ctrl_ac(protocol.FuncCode.CTL_POWER, protocol.StatusSwitch.ON)
 
-    def turn_off(self) -> None:
-        self._ctrl_ac(protocol.FuncCode.CTL_POWER, protocol.StatusSwitch.OFF)
+    def turn_off(self) -> bool:
+        return self._ctrl_ac(protocol.FuncCode.CTL_POWER, protocol.StatusSwitch.OFF)
 
-    def set_temperature(self, temperature: str) -> None:
-        self._ctrl_ac(protocol.FuncCode.CTL_TEMPERATURE, temperature)
+    def set_temperature(self, temperature: str) -> bool:
+        return self._ctrl_ac(protocol.FuncCode.CTL_TEMPERATURE, temperature)
 
-    def set_fan_mode(self, fan_mode: str) -> None:
-        self._ctrl_ac(protocol.FuncCode.CTL_FAN_MODE, protocol.StatusFanMode[fan_mode])
+    def set_fan_mode(self, fan_mode: str) -> bool:
+        return self._ctrl_ac(
+            protocol.FuncCode.CTL_FAN_MODE, protocol.StatusFanMode[fan_mode]
+        )
 
-    def set_operation_mode(self, operation_mode: str) -> None:
-        self._ctrl_ac(
+    def set_operation_mode(self, operation_mode: str) -> bool:
+        return self._ctrl_ac(
             protocol.FuncCode.CTL_OPERATION, protocol.StatusOperation[operation_mode]
         )

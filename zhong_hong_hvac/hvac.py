@@ -78,8 +78,8 @@ class HVAC:
             return True
         return False
 
-    def send(self, ac_data: protocol.AcData) -> None:
-        self.gw.send(ac_data)
+    def send(self, ac_data: protocol.AcData) -> bool:
+        return self.gw.send(ac_data)
 
     def update(self) -> bool:
         message = protocol.AcData()

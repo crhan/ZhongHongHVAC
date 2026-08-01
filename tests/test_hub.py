@@ -282,3 +282,15 @@ def test_update_returns_send_result(monkeypatch):
     monkeypatch.setattr(gw, "query_status", lambda addr: False)
 
     assert hvac.update() is False
+
+
+def test_control_methods_return_send_result(monkeypatch):
+    gw = ZhongHongGateway(ip_addr=LOCAL_HOST, port=LOCAL_PORT, gw_addr=1)
+    hvac = HVAC(gw=gw, addr_out=1, addr_in=1)
+    monkeypatch.setattr(gw, "send", lambda data: False)
+
+    assert hvac.turn_on() is False
+    assert hvac.turn_off() is False
+    assert hvac.set_temperature(24) is False
+    assert hvac.set_operation_mode("COOL") is False
+    assert hvac.set_fan_mode("LOW") is False

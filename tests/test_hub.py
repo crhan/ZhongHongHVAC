@@ -206,11 +206,12 @@ def test_probe_only_when_stale(monkeypatch):
 
     monkeypatch.setattr(gw, "query_all_status", fake_query)
 
-    gw._last_seen = time.monotonic() - 10
+    now = time.monotonic()
+    gw._last_seen = now - 10
     gw._maybe_probe()
     assert sent == []
 
-    gw._last_seen = time.monotonic() - 120
+    gw._last_seen = now - 120
     gw._maybe_probe()
     assert sent == [1]
     assert gw._probe_pending is True
@@ -218,7 +219,8 @@ def test_probe_only_when_stale(monkeypatch):
 
 def test_probe_failures_force_reconnect(monkeypatch):
     gw = ZhongHongGateway(ip_addr=LOCAL_HOST, port=LOCAL_PORT, gw_addr=1)
-    gw._last_seen = time.monotonic() - 120
+    now = time.monotonic()
+    gw._last_seen = now - 120
     gw._max_probe_failures = 2
     reconnected = []
 
@@ -236,7 +238,8 @@ def test_probe_failures_force_reconnect(monkeypatch):
 
 def test_probe_without_response_escalates(monkeypatch):
     gw = ZhongHongGateway(ip_addr=LOCAL_HOST, port=LOCAL_PORT, gw_addr=1)
-    gw._last_seen = time.monotonic() - 120
+    now = time.monotonic()
+    gw._last_seen = now - 120
     gw._max_probe_failures = 1
     reconnected = []
 
@@ -245,7 +248,7 @@ def test_probe_without_response_escalates(monkeypatch):
     )
 
     gw._probe_pending = True
-    gw._probe_sent_at = time.monotonic() - 60
+    gw._probe_sent_at = now - 60
     gw._maybe_probe()
 
     assert gw._probe_pending is False
@@ -259,10 +262,11 @@ def test_connected_property():
     gw._listener_alive = True
     gw.sock = FakeSocket()
 
-    gw._last_seen = time.monotonic() - 10
+    now = time.monotonic()
+    gw._last_seen = now - 10
     assert gw.connected is True
 
-    gw._last_seen = time.monotonic() - 400
+    gw._last_seen = now - 400
     assert gw.connected is False
 
     gw._last_seen = 0

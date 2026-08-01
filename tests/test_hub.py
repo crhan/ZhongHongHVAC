@@ -269,7 +269,7 @@ def test_connected_property():
     gw._last_seen = now - 400
     assert gw.connected is False
 
-    gw._last_seen = 0
+    gw._last_seen = None
     assert gw.connected is True
 
     gw._listener_alive = False

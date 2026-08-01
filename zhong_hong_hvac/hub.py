@@ -49,7 +49,7 @@ class ZhongHongGateway:
         self._max_probe_failures = DEFAULT_MAX_PROBE_FAILURES
         self._stale_timeout = DEFAULT_STALE_TIMEOUT
         self._listener_alive = False
-        self._last_seen = 0.0
+        self._last_seen = None
         self._last_seen_wall = None
         self._probe_pending = False
         self._probe_sent_at = 0.0
@@ -230,7 +230,7 @@ class ZhongHongGateway:
 
     def _maybe_probe(self):
         now = time.monotonic()
-        if self._last_seen <= 0 or now - self._last_seen < self._probe_interval:
+        if self._last_seen is None or now - self._last_seen < self._probe_interval:
             return
 
         if self._probe_pending:
@@ -336,12 +336,12 @@ class ZhongHongGateway:
         """Whether the gateway connection is alive and healthy."""
         if not self._listening or self.sock is None or not self._listener_alive:
             return False
-        if self._last_seen <= 0:
+        if self._last_seen is None:
             return True
         return time.monotonic() - self._last_seen <= self._stale_timeout
 
     @property
-    def last_seen(self) -> float:
+    def last_seen(self) -> Optional[float]:
         """Monotonic timestamp of the last data received from the gateway."""
         return self._last_seen
 

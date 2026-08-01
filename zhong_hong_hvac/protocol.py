@@ -57,6 +57,20 @@ class StatusFanMode(enum.Enum):
     MIDLOW = 0x05
 
 
+def _enum_or_none(enum_cls, value):
+    """Convert a raw byte to an enum member, or None if not defined.
+
+    Gateways occasionally report values that are not covered by the protocol
+    specification (for example fan speed 0x00 right after an indoor unit is
+    switched off).  A strict converter would raise and kill the whole listener
+    thread, so unknown values are tolerated and surfaced as None instead.
+    """
+    try:
+        return enum_cls(value)
+    except ValueError:
+        return None
+
+
 STATUS_PAYLOAD_LEN = 10
 STATUS_ONLINE_PAYLOAD_LEN = 3
 AC_ADDR_LEN = 2
@@ -204,8 +218,8 @@ class AcStatus(ZhongHongDataStruct):
     addr_in = attr.ib()
     switch_status = attr.ib(converter=StatusSwitch.new_status_switch)
     target_temperature = attr.ib()
-    current_operation = attr.ib(converter=StatusOperation)
-    current_fan_mode = attr.ib(converter=StatusFanMode)
+    current_operation = attr.ib(converter=lambda v: _enum_or_none(StatusOperation, v))
+    current_fan_mode = attr.ib(converter=lambda v: _enum_or_none(StatusFanMode, v))
     current_temperature = attr.ib()
     error_code = attr.ib()
     padding1 = attr.ib()

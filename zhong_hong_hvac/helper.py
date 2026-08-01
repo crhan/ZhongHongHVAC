@@ -60,7 +60,12 @@ def get_data_frame(data):
             data = data[1:]
             continue
 
-        payload_length = header.payload_length
+        try:
+            payload_length = header.payload_length
+        except Exception:
+            logger.error("unknown header, drop frame: %s", data[:4].hex())
+            data = data[1:]
+            continue
         total_length = header.length + payload_length + 1
         if len(data) < total_length:
             logger.error("date length not enough")
@@ -120,4 +125,10 @@ def parse_data(data_frame):
 
 def get_ac_data(data: bytes) -> AcData:
     for data_frame in get_data_frame(data):
-        yield parse_data(data_frame)
+        try:
+            yield parse_data(data_frame)
+        except Exception as e:
+            # One malformed frame must not kill the listener: log it and keep
+            # parsing the remaining frames in the buffer.
+            logger.error("Failed to parse frame %s: %s", data_frame.hex(), e)
+            continue

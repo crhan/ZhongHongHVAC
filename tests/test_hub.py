@@ -269,11 +269,41 @@ def test_connected_property():
     gw._last_seen = now - 400
     assert gw.connected is False
 
+    # A gateway that never responded is connected during the initial grace
+    # period only, then becomes disconnected so stale state cannot hide.
     gw._last_seen = None
+    gw._started_at = now - 10
     assert gw.connected is True
+
+    gw._started_at = now - 400
+    assert gw.connected is False
+
+    gw._started_at = None
+    assert gw.connected is False
 
     gw._listener_alive = False
     assert gw.connected is False
+
+
+def test_never_responded_gateway_is_probed(monkeypatch):
+    gw = ZhongHongGateway(ip_addr=LOCAL_HOST, port=LOCAL_PORT, gw_addr=1)
+    sent = []
+
+    def fake_query():
+        sent.append(1)
+        return True
+
+    monkeypatch.setattr(gw, "query_all_status", fake_query)
+
+    now = time.monotonic()
+    gw._started_at = now - 10
+    gw._maybe_probe()
+    assert sent == []
+
+    gw._started_at = now - 120
+    gw._maybe_probe()
+    assert sent == [1]
+    assert gw._probe_pending is True
 
 
 def test_update_returns_send_result(monkeypatch):

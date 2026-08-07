@@ -49,6 +49,7 @@ class ZhongHongGateway:
         self._max_probe_failures = DEFAULT_MAX_PROBE_FAILURES
         self._stale_timeout = DEFAULT_STALE_TIMEOUT
         self._listener_alive = False
+        self._started_at = None
         self._last_seen = None
         self._last_seen_wall = None
         self._probe_pending = False
@@ -230,7 +231,15 @@ class ZhongHongGateway:
 
     def _maybe_probe(self):
         now = time.monotonic()
-        if self._last_seen is None or now - self._last_seen < self._probe_interval:
+        # A gateway that never answered still needs probing: treat the listener
+        # start time as the last-seen reference until the first response arrives.
+        if self._last_seen is not None:
+            reference = self._last_seen
+        else:
+            reference = self._started_at
+            if reference is None:
+                return
+        if now - reference < self._probe_interval:
             return
 
         if self._probe_pending:
@@ -313,6 +322,7 @@ class ZhongHongGateway:
             self.open_socket()
 
         self._listening = True
+        self._started_at = time.monotonic()
         thread = Thread(target=self.thread_main, args=())
         self._threads.append(thread)
         thread.daemon = True
@@ -337,7 +347,10 @@ class ZhongHongGateway:
         if not self._listening or self.sock is None or not self._listener_alive:
             return False
         if self._last_seen is None:
-            return True
+            # No response yet: connected during the initial grace period only.
+            if self._started_at is None:
+                return False
+            return time.monotonic() - self._started_at <= self._stale_timeout
         return time.monotonic() - self._last_seen <= self._stale_timeout
 
     @property

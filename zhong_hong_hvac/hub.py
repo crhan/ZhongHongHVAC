@@ -301,11 +301,17 @@ class ZhongHongGateway:
                         protocol.FuncCode.CTL_OPERATION,
                         protocol.FuncCode.CTL_FAN_MODE,
                     ):
-                        header = ac_data.header
-                        for payload in ac_data:
-                            device = self.get_device(payload)
-                            if device is not None:
-                                device.set_attr(header.func_code, header.ctl_code)
+                        # The gateway echoes control commands back byte for
+                        # byte. That acknowledges receipt of the command and
+                        # says nothing about what the unit did with it: a unit
+                        # asked for a fan speed it does not have is echoed just
+                        # the same. Applying the echo would report a speed the
+                        # unit never ran at, until some later status frame
+                        # quietly corrected it.
+                        #
+                        # The gateway sends a status frame of its own once a
+                        # unit really changes, so the state is left to those.
+                        logger.debug("command acknowledged << %s", ac_data.header)
                 except Exception as e:
                     logger.error("Failed to handle message %s: %s", ac_data, e)
                     continue

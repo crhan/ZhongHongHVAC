@@ -324,3 +324,36 @@ def test_control_methods_return_send_result(monkeypatch):
     assert hvac.set_temperature(24) is False
     assert hvac.set_operation_mode("COOL") is False
     assert hvac.set_fan_mode("LOW") is False
+
+
+def test_command_echo_does_not_change_state():
+    """A gateway echoing a command back must not be taken for a state change.
+
+    The gateway acknowledges every control command by sending it back byte for
+    byte, whether or not the unit can do what was asked. A unit with three fan
+    speeds told to run at a fourth is echoed just the same, so treating the
+    echo as state would report a speed the unit never ran at.
+    """
+    gw = ZhongHongGateway(ip_addr=LOCAL_HOST, port=LOCAL_PORT, gw_addr=1)
+    hvac = HVAC(gw=gw, addr_out=1, addr_in=1)
+
+    gw._listen_to_msg(
+        _status_frame(1, 1, 1, 26, 1, protocol.StatusFanMode.LOW.value, 25, 0)
+    )
+    assert hvac.current_fan_mode == protocol.StatusFanMode.LOW.name
+
+    # What the gateway sends back when asked for a speed this unit does not
+    # have: the command, verbatim.
+    echo = bytes(
+        [
+            1,
+            protocol.FuncCode.CTL_FAN_MODE.value,
+            protocol.StatusFanMode.MIDLOW.value,
+            protocol.CtlStatus.ONE.value,
+            1,
+            1,
+        ]
+    )
+    gw._listen_to_msg(echo + bytes([sum(echo) % 256]))
+
+    assert hvac.current_fan_mode == protocol.StatusFanMode.LOW.name

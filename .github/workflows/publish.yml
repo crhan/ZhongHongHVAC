@@ -1,4 +1,4 @@
-name: Publish to PyPI
+name: Publish
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write  # create the GitHub release
   id-token: write  # trusted publishing (OIDC)
 
 jobs:
@@ -56,3 +56,13 @@ jobs:
       - name: Publish to PyPI (trusted publishing)
         if: startsWith(github.ref, 'refs/tags/') && env.HAS_PYPI_TOKEN == 'false'
         uses: pypa/gh-action-pypi-publish@release/v1
+
+      # Tags alone leave the releases page stale, which is where anyone looking
+      # for what changed goes first. Runs last so a release is only cut once
+      # the version is on PyPI.
+      - name: Create the GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true

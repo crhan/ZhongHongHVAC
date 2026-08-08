@@ -369,11 +369,30 @@ class ZhongHongGateway:
         """Wall-clock timestamp of the last data received from the gateway."""
         return self._last_seen_wall
 
-    def discovery_ac(self):
+    def discovery_ac(self, timeout: Optional[float] = None) -> list:
+        """Ask the gateway which air conditioners are on its bus.
+
+        ``timeout`` bounds the whole exchange, in seconds. Without it an
+        address that accepts the connection but never answers is given ten
+        rounds of ``_recv_timeout`` each, which is over five minutes before
+        anything comes back. That is fine for a background reconnect and far
+        too long for a caller with someone waiting on the answer.
+        """
         assert not self._listening
 
         if self.sock is None:
             self.open_socket()
+
+        deadline = None if timeout is None else time.monotonic() + timeout
+        previous_recv_timeout = self._recv_timeout
+        if deadline is not None:
+            # A single recv would otherwise outlast the whole budget. The bound
+            # has to live on the instance: send() puts the socket back to
+            # _recv_timeout after every write, so setting it on the socket here
+            # would be undone by the first request that goes out.
+            self._recv_timeout = min(self._recv_timeout, timeout)
+            if self.sock is not None:
+                self.sock.settimeout(self._recv_timeout)
 
         ret = []
         request_data = protocol.AcData()
@@ -387,29 +406,41 @@ class ZhongHongGateway:
 
         discovered = False
         count_down = 10
-        while not discovered and count_down >= 0:
-            count_down -= 1
-            logger.debug("send discovery request: %s", request_data.hex())
-            self.send(request_data)
-            data = self._get_data()
-
-            if data is None:
-                logger.error("No response from gateway")
-
-            for ac_data in helper.get_ac_data(data):
-                if ac_data.header != request_data.header:
-                    logger.debug(
-                        "header not match: %s != %s",
-                        request_data.header,
-                        ac_data.header,
+        try:
+            while not discovered and count_down >= 0:
+                if deadline is not None and time.monotonic() >= deadline:
+                    logger.error(
+                        "discovery of %s gave up after %ss", self.ip_addr, timeout
                     )
-                    continue
+                    break
 
-                for ac_online in ac_data:
-                    assert isinstance(ac_online, protocol.AcOnline)
-                    ret.append((ac_online.addr_out, ac_online.addr_in))
+                count_down -= 1
+                logger.debug("send discovery request: %s", request_data.hex())
+                self.send(request_data)
+                data = self._get_data()
 
-                discovered = True
+                if data is None:
+                    logger.error("No response from gateway")
+
+                for ac_data in helper.get_ac_data(data):
+                    if ac_data.header != request_data.header:
+                        logger.debug(
+                            "header not match: %s != %s",
+                            request_data.header,
+                            ac_data.header,
+                        )
+                        continue
+
+                    for ac_online in ac_data:
+                        assert isinstance(ac_online, protocol.AcOnline)
+                        ret.append((ac_online.addr_out, ac_online.addr_in))
+
+                    discovered = True
+        finally:
+            if deadline is not None:
+                self._recv_timeout = previous_recv_timeout
+                if self.sock is not None:
+                    self.sock.settimeout(self._recv_timeout)
 
         return ret
 

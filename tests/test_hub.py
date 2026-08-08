@@ -1,12 +1,13 @@
 """Tests for ZhongHong gateway behavior."""
 
 import os
+import socket
 import threading
 import time
 
 import pytest
 
-from zhong_hong_hvac import helper, protocol
+from zhong_hong_hvac import helper, hub as hub_module, protocol
 from zhong_hong_hvac.hub import ZhongHongGateway
 from zhong_hong_hvac.hvac import HVAC
 
@@ -357,3 +358,57 @@ def test_command_echo_does_not_change_state():
     gw._listen_to_msg(echo + bytes([sum(echo) % 256]))
 
     assert hvac.current_fan_mode == protocol.StatusFanMode.LOW.name
+
+
+class _Clock:
+    """A monotonic clock that moves on a fixed step every time it is read."""
+
+    def __init__(self, step):
+        self.now = 0.0
+        self.step = step
+
+    def monotonic(self):
+        self.now += self.step
+        return self.now
+
+    def time(self):
+        return self.now
+
+    def sleep(self, _seconds):
+        pass
+
+
+def test_discovery_gives_up_when_the_gateway_never_answers(monkeypatch):
+    """Test a host that accepts the connection but says nothing is not waited on.
+
+    Unbounded, such a host is given ten rounds of the receive timeout, which
+    is over five minutes for a caller with someone waiting on the answer.
+    """
+    gw = ZhongHongGateway(ip_addr=LOCAL_HOST, port=LOCAL_PORT, gw_addr=1)
+    sock = FakeSocket(recv_values=[socket.timeout() for _ in range(20)])
+    gw.sock = sock
+    monkeypatch.setattr(hub_module, "time", _Clock(step=2.0))
+
+    assert gw.discovery_ac(timeout=5) == []
+
+    # Reads were bounded to the budget while discovering. send() resets the
+    # socket after every write, so the bound has to survive that.
+    assert 5 in sock.timeouts
+    # And the listener's own timeout is what is left behind.
+    assert gw._recv_timeout == 30.0
+    assert sock.timeouts[-1] == 30.0
+    # Gave up on the deadline instead of running the rounds out.
+    assert len(sock.sent) < 10
+
+
+def test_discovery_without_a_timeout_keeps_retrying():
+    """Test the socket is left alone when no bound is asked for."""
+    gw = ZhongHongGateway(ip_addr=LOCAL_HOST, port=LOCAL_PORT, gw_addr=1)
+    sock = FakeSocket(recv_values=[socket.timeout() for _ in range(20)])
+    gw.sock = sock
+
+    assert gw.discovery_ac() == []
+
+    # Only the timeouts send() sets itself; the receive bound is untouched.
+    assert set(sock.timeouts) == {10.0, 30.0}
+    assert len(sock.sent) == 11

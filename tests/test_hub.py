@@ -412,3 +412,29 @@ def test_discovery_without_a_timeout_keeps_retrying():
     # Only the timeouts send() sets itself; the receive bound is untouched.
     assert set(sock.timeouts) == {10.0, 30.0}
     assert len(sock.sent) == 11
+
+
+def test_discovery_bounds_the_connection_too(monkeypatch):
+    """Test the budget covers connecting, not only the reads after it.
+
+    A host that is not there is the ordinary way to be given a wrong address,
+    and connect() takes its timeout from _recv_timeout like everything else.
+    Opening the socket before applying the bound left that first call free to
+    run to the full thirty seconds whatever budget the caller asked for.
+    """
+    gw = ZhongHongGateway(ip_addr=LOCAL_HOST, port=LOCAL_PORT, gw_addr=1)
+    connect_timeouts = []
+
+    def fake_get_socket():
+        connect_timeouts.append(gw._recv_timeout)
+        raise OSError("no route to host")
+
+    monkeypatch.setattr(gw, "_ZhongHongGateway__get_socket", fake_get_socket)
+
+    with pytest.raises(OSError):
+        gw.discovery_ac(timeout=5)
+
+    # The connect saw the budget, not the listener's thirty seconds.
+    assert connect_timeouts == [5.0]
+    # And the budget is not left behind on the instance.
+    assert gw._recv_timeout == 30.0

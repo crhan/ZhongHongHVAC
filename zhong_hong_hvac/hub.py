@@ -377,22 +377,23 @@ class ZhongHongGateway:
         rounds of ``_recv_timeout`` each, which is over five minutes before
         anything comes back. That is fine for a background reconnect and far
         too long for a caller with someone waiting on the answer.
+
+        The bound covers opening the connection as well. A host that is not
+        there at all is the ordinary way for this to be called with a wrong
+        address, and connect() is given _recv_timeout like every other socket
+        operation, so leaving it out would let the call run to thirty seconds
+        no matter what budget it was given.
         """
         assert not self._listening
-
-        if self.sock is None:
-            self.open_socket()
 
         deadline = None if timeout is None else time.monotonic() + timeout
         previous_recv_timeout = self._recv_timeout
         if deadline is not None:
-            # A single recv would otherwise outlast the whole budget. The bound
-            # has to live on the instance: send() puts the socket back to
-            # _recv_timeout after every write, so setting it on the socket here
-            # would be undone by the first request that goes out.
+            # The bound has to live on the instance: __get_socket() takes the
+            # connect timeout from it, and send() puts the socket back to it
+            # after every write, so setting it on the socket alone would be
+            # undone by the first request that goes out.
             self._recv_timeout = min(self._recv_timeout, timeout)
-            if self.sock is not None:
-                self.sock.settimeout(self._recv_timeout)
 
         ret = []
         request_data = protocol.AcData()
@@ -407,6 +408,13 @@ class ZhongHongGateway:
         discovered = False
         count_down = 10
         try:
+            if self.sock is None:
+                # Opened inside the try so a connect that fails still puts the
+                # listener's own timeout back.
+                self.open_socket()
+            elif deadline is not None:
+                self.sock.settimeout(self._recv_timeout)
+
             while not discovered and count_down >= 0:
                 if deadline is not None and time.monotonic() >= deadline:
                     logger.error(

@@ -438,3 +438,43 @@ def test_discovery_bounds_the_connection_too(monkeypatch):
     assert connect_timeouts == [5.0]
     # And the budget is not left behind on the instance.
     assert gw._recv_timeout == 30.0
+
+
+def test_stop_listen_does_not_leave_a_connection_behind(monkeypatch):
+    """A send racing the stop must not reconnect the socket it lost.
+
+    The gateway takes one connection at a time, so a socket opened after the
+    caller has given up is the one the next connection attempt is refused by.
+    """
+    gw = ZhongHongGateway(ip_addr=LOCAL_HOST, port=LOCAL_PORT, gw_addr=1)
+    gw._connect_retry_delay = 0
+    opened = []
+
+    def _open():
+        sock = FakeSocket()
+        opened.append(sock)
+        return sock
+
+    monkeypatch.setattr(gw, "_ZhongHongGateway__get_socket", _open)
+
+    gw.sock = FakeSocket(send_errors=[BrokenPipeError()])
+    gw.stop_listen()
+
+    assert gw.send(_status_request()) is False
+    assert opened == []
+
+
+def test_a_hub_sends_again_after_it_is_started_again(monkeypatch):
+    """Stopping must not leave the hub refusing to talk for good."""
+    gw = ZhongHongGateway(ip_addr=LOCAL_HOST, port=LOCAL_PORT, gw_addr=1)
+    gw._connect_retry_delay = 0
+    sock = FakeSocket()
+    monkeypatch.setattr(gw, "_ZhongHongGateway__get_socket", lambda: sock)
+    monkeypatch.setattr(gw, "thread_main", lambda: None)
+
+    gw.stop_listen()
+    assert gw.send(_status_request()) is False
+
+    gw.start_listen()
+
+    assert gw.send(_status_request()) is True

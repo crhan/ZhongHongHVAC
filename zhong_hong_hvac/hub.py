@@ -49,6 +49,7 @@ class ZhongHongGateway:
         self._max_probe_failures = DEFAULT_MAX_PROBE_FAILURES
         self._stale_timeout = DEFAULT_STALE_TIMEOUT
         self._listener_alive = False
+        self._closed = False
         self._started_at = None
         self._last_seen = None
         self._last_seen_wall = None
@@ -84,6 +85,7 @@ class ZhongHongGateway:
 
     def _ensure_socket(self):
         with self._socket_lock:
+            self._refuse_if_closed()
             if self.sock is None:
                 return self.open_socket()
             return self.sock
@@ -92,7 +94,22 @@ class ZhongHongGateway:
         with self._socket_lock:
             if failed_sock is not None and self.sock is not failed_sock:
                 return self.sock
+            self._refuse_if_closed()
             return self.open_socket()
+
+    def _refuse_if_closed(self):
+        """Refuse to open a socket the caller has already given up.
+
+        stop_listen() closes the connection, but a send() already on its way
+        out finds the socket gone and reconnects, and the gateway takes one
+        connection at a time. Without this the hub would hand back a fresh
+        connection nobody is listening to, and the next one asked for is the
+        one the gateway refuses.
+        """
+        if self._closed:
+            raise OSError(
+                f"The connection to {self.ip_addr}:{self.port} has been closed"
+            )
 
     def _try_reconnect_socket(self, failed_sock=None):
         try:
@@ -125,6 +142,10 @@ class ZhongHongGateway:
         return self.send(message)
 
     def send(self, ac_data: protocol.AcData) -> bool:
+        if self._closed:
+            logger.debug("Not sending to a hub that has been stopped")
+            return False
+
         encoded_data = ac_data.encode()
         for retry_count in range(self.max_retry + 1):
             sock = None
@@ -327,6 +348,7 @@ class ZhongHongGateway:
         if self.sock is None:
             self.open_socket()
 
+        self._closed = False
         self._listening = True
         self._started_at = time.monotonic()
         thread = Thread(target=self.thread_main, args=())
@@ -338,6 +360,7 @@ class ZhongHongGateway:
 
     def stop_listen(self):
         logger.debug("Stopping hub %s", self.gw_addr)
+        self._closed = True
         self._listening = False
         if self.sock:
             logger.info("Closing socket.")
@@ -385,6 +408,7 @@ class ZhongHongGateway:
         no matter what budget it was given.
         """
         assert not self._listening
+        self._closed = False
 
         deadline = None if timeout is None else time.monotonic() + timeout
         previous_recv_timeout = self._recv_timeout

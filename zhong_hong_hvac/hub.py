@@ -5,7 +5,7 @@ import socket
 import time
 from collections import defaultdict
 from sys import platform
-from threading import RLock, Thread
+from threading import Event, RLock, Thread
 from typing import Callable, DefaultDict, List, Optional
 
 import attr
@@ -24,6 +24,9 @@ DEFAULT_PROBE_RESPONSE_TIMEOUT = 10.0
 DEFAULT_MAX_PROBE_FAILURES = 3
 DEFAULT_STALE_TIMEOUT = 300.0
 CONNECT_FAILURE_LOG_INTERVAL = 30.0
+# How long start_listen() waits for the listener thread to actually be running
+# before giving up on being told and returning anyway.
+LISTENER_START_TIMEOUT = 5.0
 
 
 class ZhongHongGateway:
@@ -49,6 +52,7 @@ class ZhongHongGateway:
         self._max_probe_failures = DEFAULT_MAX_PROBE_FAILURES
         self._stale_timeout = DEFAULT_STALE_TIMEOUT
         self._listener_alive = False
+        self._listener_started = Event()
         self._closed = False
         self._started_at = None
         self._last_seen = None
@@ -288,6 +292,7 @@ class ZhongHongGateway:
     def thread_main(self):
         """Listen for gateway pushes and drive the connection health probe."""
         self._listener_alive = True
+        self._listener_started.set()
         try:
             while self._listening:
                 try:
@@ -351,10 +356,22 @@ class ZhongHongGateway:
         self._closed = False
         self._listening = True
         self._started_at = time.monotonic()
+        self._listener_started.clear()
         thread = Thread(target=self.thread_main, args=())
         self._threads.append(thread)
         thread.daemon = True
         thread.start()
+
+        # Thread.start() returning says the thread was created, not that it
+        # has run, and connected is false until it has. A caller that asks
+        # right away would be told a healthy gateway is unreachable.
+        if not self._listener_started.wait(LISTENER_START_TIMEOUT):
+            logger.warning(
+                "Listener thread for hub %s has not started after %ss",
+                self.gw_addr,
+                LISTENER_START_TIMEOUT,
+            )
+
         logger.info("Start message listen thread %s", thread.ident)
         return True
 

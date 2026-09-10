@@ -475,6 +475,38 @@ def test_a_hub_sends_again_after_it_is_started_again(monkeypatch):
     gw.stop_listen()
     assert gw.send(_status_request()) is False
 
+    gw._listener_started.set()  # the stubbed thread never sets it
     gw.start_listen()
 
     assert gw.send(_status_request()) is True
+
+
+def test_start_listen_waits_for_the_listener_to_be_running(monkeypatch):
+    """The hub must not be reported unreachable while its thread starts.
+
+    connected is false until the listener thread has run, so a caller that
+    queries the gateway the moment start_listen() returns would be told a
+    healthy gateway had been lost.
+    """
+    gw = ZhongHongGateway(ip_addr=LOCAL_HOST, port=LOCAL_PORT, gw_addr=1)
+    monkeypatch.setattr(gw, "_ZhongHongGateway__get_socket", lambda: FakeSocket())
+
+    original = gw.thread_main
+    entered = threading.Event()
+
+    def slow_thread_main():
+        # Stand in for a thread the interpreter has not got round to running.
+        time.sleep(0.05)
+        entered.set()
+        original()
+
+    monkeypatch.setattr(gw, "thread_main", slow_thread_main)
+    monkeypatch.setattr(gw, "_listener_iteration", lambda: time.sleep(0.01))
+
+    try:
+        gw.start_listen()
+
+        assert entered.is_set()
+        assert gw.connected
+    finally:
+        gw.stop_listen()

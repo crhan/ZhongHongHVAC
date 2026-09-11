@@ -510,3 +510,48 @@ def test_start_listen_waits_for_the_listener_to_be_running(monkeypatch):
         assert gw.connected
     finally:
         gw.stop_listen()
+
+
+def test_a_connect_finishing_after_the_stop_does_not_keep_the_socket(monkeypatch):
+    """A socket that arrives after the stop must not be claimed.
+
+    stop_listen() cannot take the socket lock — it has to be able to
+    interrupt a connect — so it can run all the way through while a connect
+    is in flight, finding nothing to close because the socket does not exist
+    yet. The connect then has to notice on its own, or the gateway is left
+    holding a connection nobody will ever close, and it takes one at a time.
+    """
+    gw = ZhongHongGateway(ip_addr=LOCAL_HOST, port=LOCAL_PORT, gw_addr=1)
+    gw._connect_retry_delay = 0
+    connecting = threading.Event()
+    stopped = threading.Event()
+    sock = FakeSocket()
+
+    def slow_connect():
+        connecting.set()
+        stopped.wait(timeout=5)
+        return sock
+
+    monkeypatch.setattr(gw, "_ZhongHongGateway__get_socket", slow_connect)
+
+    errors = []
+
+    def _open():
+        try:
+            gw.open_socket()
+        except OSError as err:
+            errors.append(err)
+
+    opener = threading.Thread(target=_open)
+    opener.daemon = True
+    opener.start()
+
+    assert connecting.wait(timeout=5)
+    gw.stop_listen()  # nothing to close yet: the socket has not arrived
+    stopped.set()
+    opener.join(timeout=5)
+
+    assert sock.closed
+    assert gw.sock is None
+    # And the caller is told, rather than handed a socket that is already gone.
+    assert errors

@@ -84,7 +84,21 @@ class ZhongHongGateway:
                 self.sock = None
                 time.sleep(self._connect_retry_delay)
 
-            self.sock = self.__get_socket()
+            sock = self.__get_socket()
+
+            # stop_listen() does not take this lock, and cannot: it has to be
+            # able to interrupt a connect. So it can have run all the way
+            # through while this one was connecting, finding nothing to close
+            # because the socket did not exist yet. Whoever is left holding a
+            # live socket has to be the one to notice.
+            if self._closed:
+                sock.close()
+                raise OSError(
+                    f"The connection to {self.ip_addr}:{self.port} was closed "
+                    "while it was being opened"
+                )
+
+            self.sock = sock
             return self.sock
 
     def _ensure_socket(self):
@@ -152,6 +166,10 @@ class ZhongHongGateway:
 
         encoded_data = ac_data.encode()
         for retry_count in range(self.max_retry + 1):
+            if self._closed:
+                logger.debug("Giving up a send to a hub that has been stopped")
+                return False
+
             sock = None
             try:
                 sock = self._ensure_socket()
@@ -350,10 +368,13 @@ class ZhongHongGateway:
             logger.info("Hub %s is listening", self.gw_addr)
             return True
 
+        # Before the socket, which a hub that was stopped would otherwise
+        # refuse to open.
+        self._closed = False
+
         if self.sock is None:
             self.open_socket()
 
-        self._closed = False
         self._listening = True
         self._started_at = time.monotonic()
         self._listener_started.clear()
